@@ -44,6 +44,7 @@ class Flows(scrapi_base.ScrapiBase):
         scope=False,
         flow_id: str = None,
         agent_id: str = None,
+        language_code: str = "en",
     ):
         super().__init__(
             creds_path=creds_path,
@@ -51,10 +52,10 @@ class Flows(scrapi_base.ScrapiBase):
             creds=creds,
             scope=scope,
         )
-
         if flow_id:
             self.flow_id = flow_id
 
+        self.language_code = language_code
         self.agent_id = agent_id
         self.pages = pages.Pages(creds=self.creds)
 
@@ -96,9 +97,7 @@ class Flows(scrapi_base.ScrapiBase):
             )
 
         if model_training_mode in model_training_map:
-            nlu_settings.model_training_mode = model_training_map[
-                model_training_mode
-            ]
+            nlu_settings.model_training_mode = model_training_map[model_training_mode]
         else:
             raise KeyError(
                 f"`{model_training_mode}` is invalid. "
@@ -135,8 +134,8 @@ class Flows(scrapi_base.ScrapiBase):
         return flows_dict
 
     def get_flow_page_map(
-            self, agent_id: str, rate_limit: float = 1.0
-            ) -> Dict[str, Dict[str, str]]:
+        self, agent_id: str, rate_limit: float = 1.0
+    ) -> Dict[str, Dict[str, str]]:
         """Exports a user friendly dict containing Flows, Pages, and IDs
         This method builds on top of `get_flows_map` and builds out a nested
         dictionary containing all of the Page Display Names and UUIDs contained
@@ -159,8 +158,7 @@ class Flows(scrapi_base.ScrapiBase):
         flows_map = self.get_flows_map(agent_id, reverse=True)
 
         for flow in flows_map:
-            pages_map = self.pages.get_pages_map(
-                flows_map[flow], reverse=True)
+            pages_map = self.pages.get_pages_map(flows_map[flow], reverse=True)
             flow_page_map[flow] = {"id": flows_map[flow], "pages": pages_map}
             time.sleep(rate_limit)
 
@@ -209,7 +207,7 @@ class Flows(scrapi_base.ScrapiBase):
 
         request = types.flow.ListFlowsRequest()
         request.parent = agent_id
-
+        request.language_code = self.language_code
         client_options = self._set_region(agent_id)
         client = services.flows.FlowsClient(
             credentials=self.creds, client_options=client_options
@@ -222,9 +220,7 @@ class Flows(scrapi_base.ScrapiBase):
                 flows.append(flow)
         return flows
 
-    def get_flow_by_display_name(
-        self, display_name: str, agent_id: str
-    ) -> types.Flow:
+    def get_flow_by_display_name(self, display_name: str, agent_id: str) -> types.Flow:
         """Get a single CX Flow object based on its display name.
 
         Args:
@@ -241,8 +237,7 @@ class Flows(scrapi_base.ScrapiBase):
             flow_id = flows_map[display_name]
         else:
             raise ValueError(
-                f'Flow "{display_name}" '
-                f"does not exist in the specified agent."
+                f'Flow "{display_name}" ' f"does not exist in the specified agent."
             )
 
         flow = self.get_flow(flow_id=flow_id)
@@ -261,6 +256,10 @@ class Flows(scrapi_base.ScrapiBase):
         """
 
         client_options = self._set_region(flow_id)
+        request = types.flow.GetFlowRequest()
+        request.name = flow_id
+        request.language_code = self.language_code
+
         client = services.flows.FlowsClient(
             credentials=self.creds, client_options=client_options
         )
@@ -318,9 +317,7 @@ class Flows(scrapi_base.ScrapiBase):
         return response
 
     @scrapi_base.api_call_counter_decorator
-    def update_flow(
-        self, flow_id: str, obj: types.Flow = None, **kwargs
-    ) -> types.Flow:
+    def update_flow(self, flow_id: str, obj: types.Flow = None, **kwargs) -> types.Flow:
         """Update a single specific CX Flow object.
 
         Args:
@@ -448,14 +445,10 @@ class Flows(scrapi_base.ScrapiBase):
         """
 
         if gcs_path and flow_content:
-            raise ValueError(
-                "gcs_path or flow_content required (But not both!)."
-            )
+            raise ValueError("gcs_path or flow_content required (But not both!).")
 
         if not gcs_path and not flow_content:
-            raise ValueError(
-                "gcs_path or flow_content required (But not both!)."
-            )
+            raise ValueError("gcs_path or flow_content required (But not both!).")
 
         request = types.flow.ImportFlowRequest()
         request.parent = agent_id
@@ -493,6 +486,7 @@ class Flows(scrapi_base.ScrapiBase):
 
         client_options = self._set_region(flow_id)
         client = services.flows.FlowsClient(
-            credentials=self.creds, client_options=client_options)
+            credentials=self.creds, client_options=client_options
+        )
         req = types.DeleteFlowRequest(name=flow_id, force=force)
         client.delete_flow(request=req)
